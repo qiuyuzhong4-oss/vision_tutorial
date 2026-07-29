@@ -398,3 +398,5 @@ chmod 600 ~/.ssh/config
 ```bash
 chmod 600 ~/.ssh/id_rsa
 ```
+
+记得再VScode里面也有用来管理ssh的插件也可以看看那个
