@@ -1,0 +1,669 @@
+# Robocon 2026 嵌入式视觉识别系统 — Cline 开发规则
+
+## 项目概述
+
+本项目为 **Robocon 2026** 选题下的嵌入式视觉识别程序，运行于搭载传感器的移动机器人平台，实现多相机、多雷达协同的实时目标检测与 3D 定位。
+
+### 核心技术栈
+| 层级 | 技术选型 |
+|------|----------|
+| 操作系统 | Ubuntu 22.04 |
+| 机器人框架 | ROS2 Humble Hawksbill |
+| 主编程语言 | Python 3.10 |
+| 辅助语言 | C++17 (仅性能瓶颈处使用) |
+| 目标检测模型 | YOLOv8 |
+| 推理加速 | TensorRT |
+| 3D 可视化/拟真 | Rviz2 |
+| 雷达驱动 | Livox SDK2 + livox_ros2_driver |
+
+---
+
+## 第 1 章：开发环境规范
+
+### 1.1 系统基础环境
+- **OS**: Ubuntu 22.04 LTS (Jammy Jellyfish)
+- **ROS2 安装**: 通过 apt 安装 `ros-humble-desktop`
+  ```bash
+  sudo apt install ros-humble-desktop
+  ```
+- **Python 版本**: 系统默认 Python 3.10，禁止升级系统 Python 主版本。
+- **Python 环境管理**:
+  - 每个 ROS2 Package 维护独立的 `requirements.txt`
+  - 推荐使用 `venv` (轻量) 或 `conda` 管理虚拟环境
+  - `ld_library_path` 中优先保证 ROS2 共享库路径
+
+### 1.2 构建与工作空间
+- **工作空间路径**: `~/ros2_ws/`
+- **构建命令**:
+  ```bash
+  cd ~/ros2_ws
+  colcon build --symlink-install --packages-select <package_name>
+  ```
+  - `--symlink-install`: Python 代码修改后无需重新编译
+  - 指定 `--packages-select` 避免全量编译
+- **source 环境**:
+  ```bash
+  source /opt/ros/humble/setup.bash
+  source ~/ros2_ws/install/setup.bash
+  ```
+
+### 1.3 依赖安装清单
+- **YOLOv8**: `pip install ultralytics`
+- **TensorRT**: 通过 NVIDIA SDK Manager 或 `.deb` 包安装 (匹配 CUDA 版本)
+- **Livox SDK2**: 从 [Livox-SDK/Livox-SDK2](https://github.com/Livox-SDK/Livox-SDK2) 编译安装
+- **livox_ros2_driver**: 从 [Livox-SDK/livox_ros2_driver](https://github.com/Livox-SDK/livox_ros2_driver) 编译
+- **ROS2 常用包**:
+  ```bash
+  sudo apt install ros-humble-cv-bridge ros-humble-image-transport \
+                   ros-humble-image-transport-plugins \
+                   ros-humble-tf2-ros ros-humble-message-filters \
+                   ros-humble-vision-msgs ros-humble-realsense2-camera \
+                   ros-humble-usb-cam ros-humble-rqt-image-view
+  ```
+
+---
+
+## 第 2 章：硬件设备与驱动规范
+
+### 2.1 USB 普通相机
+- **驱动包**: `usb_cam`
+- **识别方式**: `/dev/video*` 设备号 (建议通过 udev 规则固定)
+- **话题命名规范**:
+  ```
+  /camera_usb_<id>/image_raw          # 原始图像
+  /camera_usb_<id>/camera_info        # 相机内参
+  ```
+  - `<id>` 为数字序号，从 0 开始
+  - 示例: `/camera_usb_0/image_raw`
+
+### 2.2 Intel RealSense D435 / D435i 相机
+- **驱动包**: `realsense2_camera`
+- **话题命名规范**:
+  ```
+  /camera_d435_<id>/color/image_raw       # RGB 图像
+  /camera_d435_<id>/depth/image_rect_raw  # 深度图 (毫米单位)
+  /camera_d435_<id>/color/camera_info     # RGB 内参
+  /camera_d435_<id>/depth/camera_info     # 深度内参
+  ```
+- **必须启用的功能**:
+  - 红外发射器 (Emitter Enabled): 1.0 (室内)
+  - 深度与 RGB 对齐: `align_depth.enable = true`
+- **注意事项**: D435 启动需 3-5 秒预热，launch 中需加入 delay。
+
+### 2.3 海康相机
+- **接口类型**: GigE (千兆以太网) 或 USB3.0
+- **驱动方案**:
+  - **优先方案**: MVS SDK (机器视觉软件开发套件) + 自行编写的 ROS2 wrapper
+  - **备选方案**: GStreamer + `gscam` 包
+- **话题命名规范**:
+  ```
+  /camera_hik_<id>/image_raw
+  /camera_hik_<id>/camera_info
+  ```
+- **GigE 注意事项**:
+  - 设置巨帧 (Jumbo Frame) MTU 为 9000
+  - 绑定静态 IP，子网独立于主网络
+
+### 2.4 Livox 雷达
+- **驱动包**: `livox_ros2_driver`
+- **话题命名规范**:
+  ```
+  /livox/lidar          # PointCloud2 格式点云
+  /livox/imu            # IMU 数据 (如有)
+  ```
+- **参数配置**:
+  - 数据类型转换: `pcl2_type = 1` (xyzrtl → PointCloud2)
+  - 多雷达场景: 修改 launch 中 `bd_list` 绑定多个雷达序列号
+  - 帧率: 默认 10 Hz，可根据场景调整
+
+### 2.5 标定文件管理
+- **存放路径规范**:
+  ```
+  ros2_ws/src/vision_camera/config/
+  ├── calib_usb_0.yaml
+  ├── calib_d435_0.yaml
+  ├── calib_hik_0.yaml
+  └── extrinsics.yaml        # 外参 TF 静态变换
+  ```
+- **内参格式**: 标准 ROS `sensor_msgs/CameraInfo` YAML 格式
+- **外参**: 通过 `static_transform_publisher` 发布到 TF2 树
+
+---
+
+## 第 3 章：代码架构与组织规范
+
+### 3.1 ROS2 工作空间结构
+
+```
+~/ros2_ws/src/
+├── vision_common/              # 公共接口定义
+│   ├── msg/                    # 自定义消息
+│   │   ├── Detection2D.msg     # 2D 检测框 (id, class, bbox, confidence)
+│   │   ├── Detection2DArray.msg
+│   │   ├── Detection3D.msg     # 3D 检测框 (id, class, pose, dimensions, confidence)
+│   │   ├── Detection3DArray.msg
+│   │   └── ROI.msg             # ROI 区域定义
+│   ├── srv/                    # 自定义服务
+│   │   └── SetDetectionMode.srv
+│   ├── CMakeLists.txt
+│   └── package.xml
+│
+├── vision_camera/              # 相机驱动管理层
+│   ├── launch/                 # 相机启动 launch 文件
+│   │   ├── camera_usb.launch.py
+│   │   ├── camera_d435.launch.py
+│   │   └── camera_hik.launch.py
+│   ├── config/                 # 标定与驱动参数
+│   ├── vision_camera/          # Python 包
+│   │   └── camera_manager.py
+│   ├── setup.py
+│   └── package.xml
+│
+├── vision_detector/            # YOLOv8 + TensorRT 推理
+│   ├── launch/
+│   │   └── detector.launch.py
+│   ├── models/                 # 权重文件
+│   │   └── yolo_roi.engine     # TensorRT 引擎
+│   ├── vision_detector/
+│   │   ├── yolo_detector.py    # YOLOv8 推理节点
+│   │   └── trt_infer.py        # TensorRT 推理封装
+│   ├── setup.py
+│   └── package.xml
+│
+├── vision_lidar/               # 雷达点云处理
+│   ├── launch/
+│   │   └── lidar.launch.py
+│   ├── vision_lidar/
+│   │   ├── pointcloud_processor.py  # 点云滤波 + 聚类
+│   │   └── cluster_detector.py      # 点云目标检测
+│   ├── setup.py
+│   └── package.xml
+│
+├── vision_roi/                 # ROI 小目标增强识别
+│   ├── launch/
+│   │   └── roi_detector.launch.py
+│   ├── vision_roi/
+│   │   └── roi_enhancer.py     # ROI 裁剪 + 精检
+│   ├── setup.py
+│   └── package.xml
+│
+├── vision_fusion/              # 多传感器融合
+│   ├── launch/
+│   │   └── fusion.launch.py
+│   ├── vision_fusion/
+│   │   ├── tf_manager.py       # TF2 变换管理
+│   │   ├── temporal_sync.py    # 时间同步器
+│   │   └── association.py      # 3D 数据关联
+│   ├── setup.py
+│   └── package.xml
+│
+├── vision_bringup/             # 顶层启动
+│   ├── launch/
+│   │   ├── vision_full.launch.py   # 全系统启动
+│   │   └── vision_minimal.launch.py # 最小启动 (调试用)
+│   ├── setup.py
+│   └── package.xml
+│
+└── vision_rviz/                # Rviz2 可视化配置
+    ├── config/
+    │   └── vision.rviz
+    ├── setup.py
+    └── package.xml
+```
+
+### 3.2 Package 命名规范
+- **前缀统一**: 所有功能包以 `vision_` 开头
+- **命名风格**: 全小写 + 下划线 (snake_case)
+- **功能拆分原则**: 每个 package 尽可能职责单一，通过 topic 通信解耦
+
+### 3.3 节点命名规范
+- **Python 节点类**: 大驼峰 (PascalCase)
+  ```python
+  class YoloDetectorNode(Node):
+  class PointCloudProcessor(Node):
+  ```
+- **节点实例名**: 小写下划线，与类名对应
+  ```python
+  node = YoloDetectorNode('yolo_detector')
+  ```
+
+### 3.4 Launch 文件规范
+- **格式**: 必须使用 **Python launch** (`.launch.py`)，禁止使用 XML launch
+- **参数化**: 所有可变参数通过 launch 参数暴露，禁止硬编码
+- **组合方式**: 顶层 launch (vision_bringup) 通过 `IncludeLaunchDescription` 组合子 launch
+- **条件启动**: 使用 `IfCondition`/`UnlessCondition` 实现按需加载
+
+---
+
+## 第 4 章：视觉识别流水线规范
+
+### 4.1 YOLOv8 模型管理
+- **训练产出**: `.pt` 权重文件存放于 `vision_detector/models/`
+- **TensorRT 导出**: 训练完成后必须导出为 `.engine` 文件
+  ```python
+  from ultralytics import YOLO
+  model = YOLO('best.pt')
+  model.export(format='engine', device=0, half=True, batch=1)
+  ```
+- **推理精度**: 默认 **FP16** (嵌入式平台性能与精度的平衡点)
+- **batch_size**: 固定为 1 (实时推理场景)
+- **模型命名**: `yolo_<task>_<date>_<resolution>.engine`
+  - 示例: `yolo_armor_20260315_640x480.engine`
+
+### 4.2 YOLOv8 推理节点模板
+
+```python
+# vision_detector/yolo_detector.py (结构模板)
+import cv2
+import numpy as np
+from cv_bridge import CvBridge
+import tensorrt as trt  # noqa: F401 (import order)
+
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from vision_common.msg import Detection2DArray
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+
+
+class YoloDetectorNode(Node):
+    """YOLOv8 TensorRT 通用推理节点。"""
+
+    def __init__(self):
+        super().__init__('yolo_detector')
+        self.bridge = CvBridge()
+        # 1. 加载 .engine，创建 TensorRT context
+        # 2. 订阅图像话题
+        # 3. 发布 Detection2DArray
+        # ...
+
+    def preprocess(self, img: np.ndarray) -> np.ndarray:
+        """前处理: letterbox → normalize → NCHW"""
+        # ...
+
+    def inference(self, tensor: np.ndarray) -> np.ndarray:
+        """TensorRT 推理"""
+        # ...
+
+    def postprocess(self, raw_output: np.ndarray, original_shape) -> Detection2DArray:
+        """后处理: 解析输出 → NMS → 构造ROS消息"""
+        # ...
+
+    def callback(self, img_msg: Image):
+        """图像回调: 完整推理流水线"""
+        # ...
+```
+
+### 4.3 小目标 ROI 增强识别策略 (标准两级流水线)
+
+这是 Robocon/RoboMaster 社区验证的标准方案，用于弥补 YOLO 在小目标上的不足。
+
+```
+┌──────────┐     ┌──────────────┐     ┌──────────────┐
+│ 全图输入  │────▶│ 第一级粗检    │────▶│ 低置信度候选框 │
+│ 640x480  │     │ conf≥0.3     │     │ (一批)        │
+└──────────┘     └──────────────┘     └──────┬───────┘
+                                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │ ROI 裁剪 + 放大    │
+                                    │ 候选框 ×1.5~2.0   │
+                                    └────────┬─────────┘
+                                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │ 第二级精检         │
+                                    │ conf≥0.6 (更高阈值)│
+                                    └────────┬─────────┘
+                                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │ 融合输出          │
+                                    │ Detection2DArray  │
+                                    └──────────────────┘
+```
+
+- **实现要求**:
+  - ROI 节点 (`vision_roi/roi_enhancer.py`) 订阅第一级粗检结果
+  - 裁剪区域外扩 1.5~2 倍确保目标在 ROI 边缘仍有上下文
+  - 精检结果中的框坐标需映射回全图坐标
+  - 支持发布 ROI 子图话题 (image_transport compressed) 供 rviz2 调试
+
+---
+
+## 第 5 章：多传感器融合规范
+
+### 5.1 TF2 坐标系树
+
+```
+odom
+  │
+  └── base_link (机器人底盘)
+        ├── camera_usb_0_link
+        │     └── camera_usb_0_optical_link
+        ├── camera_d435_0_link
+        │     └── camera_d435_0_optical_link
+        ├── camera_hik_0_link
+        │     └── camera_hik_0_optical_link
+        └── livox_frame (雷达)
+```
+
+- **命名约定**:
+  - `*_link`: 传感器物理安装位置
+  - `*_optical_link`: 遵循 REP-103 光轴约定 (X→右, Y→下, Z→前)
+- **外参标定**: 使用 `easy_handeye` 或手动标定，写入 YAML → `static_transform_publisher`
+- **TF 频率**: 静态变换 30Hz 发布，动态变换 (odom→base_link) 由里程计/IMU 提供
+
+### 5.2 时间同步策略
+
+相机和雷达采样频率不同，必须进行时间同步：
+
+```python
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+
+class FusionNode(Node):
+    def __init__(self):
+        image_sub = Subscriber(self, Image, '/camera_d435_0/color/image_raw')
+        lidar_sub = Subscriber(self, PointCloud2, '/livox/lidar')
+
+        ts = ApproximateTimeSynchronizer(
+            [image_sub, lidar_sub],
+            queue_size=10,
+            slop=0.05  # 50ms 时间容差
+        )
+        ts.registerCallback(self.synced_callback)
+
+    def synced_callback(self, img_msg, lidar_msg):
+        # 时间戳对齐后的融合处理
+        pass
+```
+
+### 5.3 3D 关联算法 (相机检测 + 雷达点云)
+
+```
+相机检测结果 (2D框)              雷达点云
+        │                            │
+        ▼                            ▼
+  TF2 变换到 base_link         体素下采样 (voxel_grid)
+        │                     降噪 (statistical_outlier)
+        ▼                     聚类 (Euclidean / DBSCAN)
+  2D 中心点 → 3D 射线               │
+  (深度图采样)                       ▼
+        │                      3D 候选中心点
+        └────────┬─────────────────┘
+                 ▼
+         最近邻匹配 (Nearest Neighbor)
+         或 匈牙利算法 (Hungarian)
+                 │
+                 ▼
+         融合 Detection3DArray
+```
+
+- **关键实现**:
+  - 从 D435 深度图提取 2D 检测框中心的深度值 (取 ROI 区域深度中位数)
+  - 雷达点云先体素下采样 (leaf_size=0.05m) 降低密度
+  - 聚类半径: 欧式 0.1~0.3m (视目标尺寸)
+  - 匹配阈值: 欧氏距离 < 1.0m 认为可能关联，取最近者
+  - 融合结果同时发布 3D Marker 到 rviz2 显示
+
+---
+
+## 第 6 章：通信与接口规范
+
+### 6.1 话题命名规范
+
+遵循 `/vision/<module>/<description>` 层级：
+
+| 模块 | 输入话题 | 输出话题 |
+|------|---------|---------|
+| vision_camera (USB) | — | `/camera_usb_<id>/image_raw` |
+| vision_camera (D435) | — | `/camera_d435_<id>/color/image_raw` |
+| vision_detector | `/camera_*/image_raw` | `/vision/detector/detections_2d` |
+| vision_roi | `/vision/detector/detections_2d` | `/vision/roi/detections_2d_refined` |
+| vision_lidar | `/livox/lidar` | `/vision/lidar/clusters_3d` |
+| vision_fusion | `/vision/roi/detections_2d_refined` + `/vision/lidar/clusters_3d` | `/vision/fusion/detections_3d` |
+
+### 6.2 自定义消息定义
+
+所有 `.msg` / `.srv` / `.action` 必须在 `vision_common` 包内定义：
+
+```
+vision_common/
+├── msg/
+│   ├── Detection2D.msg       # 2D 单个检测框
+│   ├── Detection2DArray.msg   # 2D 检测结果数组 (含 header)
+│   ├── Detection3D.msg        # 3D 单个检测框
+│   ├── Detection3DArray.msg   # 3D 检测结果数组
+│   └── Cluster3D.msg          # 雷达聚类结果
+├── srv/
+│   ├── SetDetectionMode.srv   # 切换检测模式 (全图/ROI)
+│   └── GetDetectionState.srv  # 查询当前检测状态
+└── CMakeLists.txt             # 消息编译配置
+```
+
+### 6.3 QoS 配置建议
+
+| 数据类型 | 可靠性 | 持久性 | 历史深度 |
+|----------|--------|--------|----------|
+| 相机图像 (Image) | BEST_EFFORT | VOLATILE | 1 |
+| 雷达点云 (PointCloud2) | BEST_EFFORT | VOLATILE | 1 |
+| 检测结果 (DetectionArray) | RELIABLE | VOLATILE | 10 |
+| TF 静态变换 | RELIABLE | TRANSIENT_LOCAL | 1 |
+
+```python
+# 图像订阅 QoS 示例
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+
+qos_sensor = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1
+)
+```
+
+### 6.4 image_transport 使用规范
+
+- **发布端**: 必须使用 `image_transport` 而非直接 `create_publisher`
+  ```python
+  from image_transport import ImageTransport
+  self.it = ImageTransport(self)
+  self.pub = self.it.advertise('/vision/roi/crop', qos_sensor)
+  ```
+- **订阅端**: 同样使用 `image_transport` 订阅以兼容 compressed 等插件
+- **推荐插件**: `compressed` (JPG压缩) 或 `theora` (视频流)，大幅减少带宽
+
+---
+
+## 第 7 章：性能优化与调试规范
+
+### 7.1 TensorRT 推理优化
+- **引擎生成**: 在目标 GPU 上生成 `.engine`，不可跨设备移植
+- **CUDA Stream**: 异步推理 + 异步拷贝，避免阻塞 ROS2 回调
+- **内存预分配**: 输入/输出 buffer 在 `__init__` 中一次性分配，推理循环中复用
+- **预热**: 启动后跑 3~5 次空推理消除首次推理延迟
+
+### 7.2 图像处理优化
+- **分辨率**: 输入分辨率不高于模型训练分辨率 (通常 640x640)
+- **图像缩放**: 使用 `cv2.resize` 而非模型内部 resize (减少一次拷贝)
+- **ROI 裁剪**: 仅在粗检有低置信度候选时裁剪，避免无故开销
+- **颜色空间**: 保持在 BGR (OpenCV 默认) → 仅在送入模型时做 BGR→RGB 转换
+
+### 7.3 点云处理优化
+- **体素下采样**: 所有点云处理前先 `voxel_grid(leaf_size=0.05)`
+- **统计滤波**: 移除孤立噪声点 (mean_k=50, std_mul=1.0)
+- **ROI 过滤**: 只保留 base_link 前方 ±Xm、±Ym 范围内点云
+- **聚类加速**: 点云数量 > 5000 时考虑 GPU 加速聚类或降采样后再聚类
+
+### 7.4 调试与监控
+- **rqt 工具链**:
+  ```bash
+  rqt_image_view     # 实时查看图像话题
+  rqt_graph          # 节点和话题拓扑图
+  ros2 topic hz      # 检查话题发布频率
+  ros2 topic echo    # 查看话题内容 (限制次数)
+  ```
+- **rviz2 可视化**:
+  - 添加 Image Display 实时查看各阶段图像
+  - 添加 MarkerArray Display 查看 3D 检测框
+  - 添加 TF Display 验证坐标系变换
+  - 添加 PointCloud2 Display 查看原始和聚类后点云
+- **日志等级**:
+  ```python
+  self.get_logger().info(f'检测耗时: {infer_time:.2f}ms')     # 关键信息
+  self.get_logger().debug(f'检测到 {len(dets)} 个目标')       # 逐帧调试
+  self.get_logger().warn(f'摄像头断连，等待重连...')           # 警告
+  self.get_logger().error(f'TensorRT 引擎加载失败')            # 错误
+  ```
+  - 正式比赛时通过 `--ros-args -r __log_level:=warn` 降低日志等级
+  - 调试时通过 `--ros-args -r __log_level:=debug` 开启详细日志
+
+### 7.5 Rviz2 拟真调试流程
+1. 启动 `vision_full.launch.py`
+2. 打开 `rviz2 -d ros2_ws/src/vision_rviz/config/vision.rviz`
+3. 确认 TF 树完整 (`ros2 run tf2_tools view_frames`)
+4. 确认所有图像/点云话题正常流入
+5. 确认 3D 检测框位置与实际目标吻合
+
+---
+
+## 第 8 章：代码风格规范
+
+### 8.1 Python 代码规范
+- **标准**: [PEP 8](https://peps.python.org/pep-0008/)
+- **行宽**: 最大 100 字符 (非严格 79)
+- **缩进**: 4 空格，禁止 Tab
+- **类型注解**: 所有函数应有参数类型和返回值类型注解
+  ```python
+  def preprocess(self, img: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
+      ...
+  ```
+- **docstring**: Google 风格
+  ```python
+  def associate_3d(self, det_2d: Detection2DArray, clusters: Cluster3DArray) -> Detection3DArray:
+      """将 2D 检测结果与 3D 雷达聚类关联。
+
+      Args:
+          det_2d: 图像检测结果数组。
+          clusters: 雷达点云聚类候选。
+
+      Returns:
+          融合后的 3D 检测框数组。
+
+      Raises:
+          TF2Exception: 当 TF2 变换不可用时抛出。
+      """
+  ```
+- **导入顺序**:
+  1. Python 标准库
+  2. 第三方库 (numpy, cv2, rclpy 等)
+  3. ROS2 消息/服务接口
+  4. 项目内部模块
+
+### 8.2 C++ 代码规范 (仅少数文件)
+- **标准**: ROS2 C++ Style (基于 Google C++ Style)
+- **格式化**: `ament_clang_format --reformat`
+- **命名**: 函数名大驼峰，变量名小写下划线，类名大驼峰
+
+### 8.3 命名规范速查表
+
+| 类型 | 风格 | 示例 |
+|------|------|------|
+| Package 名 | 小写下划线 | `vision_detector` |
+| Node 类名 | 大驼峰 | `YoloDetectorNode` |
+| Node 实例名 | 小写下划线 | `yolo_detector` |
+| Topic 名 | 小写下划线 | `/vision/detector/detections` |
+| Service 名 | 小写下划线 | `/vision/set_mode` |
+| 函数名 | 小写下划线 | `preprocess_image()` |
+| 变量名 | 小写下划线 | `detection_array` |
+| 常量 | 大写下划线 | `IMAGE_WIDTH` |
+| 文件名 | 小写下划线 | `yolo_detector.py` |
+| Launch 文件名 | 小写下划线 | `detector.launch.py` |
+
+### 8.4 Git 提交规范
+- **使用 Conventional Commits**:
+  ```
+  feat(vision_detector): 添加 YOLOv8 TensorRT 推理节点
+  fix(vision_fusion): 修复 3D 关联时间戳同步偏移错误
+  docs(vision_common): 添加自定义消息注释
+  refactor(vision_camera): 提取公共相机管理基类
+  test(vision_roi): 添加 ROI 裁剪单元测试
+  chore: 更新依赖版本号
+  ```
+- **分支策略**: `main` (稳定版) + `dev` (开发分支) + `feat/<功能>` (功能分支)
+- **禁止**: 提交 `.engine` 大文件 (>10MB) 和 `__pycache__` 目录
+
+---
+
+## 第 9 章：常见场景与命令参考
+
+### 9.1 新加一台相机
+1. 编写 `vision_camera/config/calib_<camera_name>.yaml`
+2. 在 `vision_camera/launch/` 添加对应 launch 文件
+3. 更新 `vision_bringup/launch/vision_full.launch.py` 引入
+
+### 9.2 新增检测类别
+1. 重新训练 YOLOv8 模型
+2. 导出 `.engine`
+3. 更新 `vision_detector/models/` 中的模型文件
+4. 更新 `vision_detector` 节点中的类别映射字典
+
+### 9.3 重新标定外参
+1. 采集标定数据 (棋盘格 + 雷达反射板)
+2. 运行 `easy_handeye` 或手动求解
+3. 更新 `vision_camera/config/extrinsics.yaml`
+4. 更新 `vision_camera/launch/` 中的 `static_transform_publisher` 参数
+
+### 9.4 调试系统延迟
+```bash
+# 1. 检查各节点频率
+ros2 topic hz /camera_d435_0/color/image_raw
+ros2 topic hz /vision/detector/detections_2d
+ros2 topic hz /vision/fusion/detections_3d
+
+# 2. 检查端到端延迟
+ros2 run vision_common latency_checker  # 自定义延迟检查工具
+
+# 3. rviz2 可视化检查
+rviz2 -d ros2_ws/src/vision_rviz/config/vision.rviz
+```
+
+### 9.5 比赛模式切换
+```bash
+# 全量启动 (调试)
+ros2 launch vision_bringup vision_full.launch.py
+
+# 比赛启动 (降低日志等级，关闭调试话题)
+ros2 launch vision_bringup vision_full.launch.py \
+    log_level:=warn \
+    enable_debug_image:=false \
+    enable_rviz:=false
+```
+
+---
+
+## 附录 A：参考资源
+
+| 资源 | 链接/来源 |
+|------|----------|
+| ROS2 Humble 文档 | https://docs.ros.org/en/humble/ |
+| YOLOv8 (Ultralytics) | https://github.com/ultralytics/ultralytics |
+| TensorRT 文档 | https://docs.nvidia.com/deeplearning/tensorrt/ |
+| Livox ROS2 Driver | https://github.com/Livox-SDK/livox_ros2_driver |
+| RealSense ROS2 | https://github.com/IntelRealSense/realsense-ros |
+| 萝马车圈 (社区) | RoboMaster/Robocon CV 组技术讨论 |
+| REP-103 (标准坐标系) | https://www.ros.org/reps/rep-0103.html |
+| REP-105 (坐标框架) | https://www.ros.org/reps/rep-0105.html |
+
+## 附录 B：禁止事项
+
+- ❌ 禁止在 ROS2 回调中使用密集循环或长时间阻塞 (>50ms)
+- ❌ 禁止硬编码相机内参/外参（必须通过 YAML 配置或 TF 获取）
+- ❌ 禁止在节点中直接 `print()`，必须使用 `self.get_logger()`
+- ❌ 禁止跳过 TF2 的 `canTransform()` 检查而直接 `lookupTransform()`
+- ❌ 禁止在多线程环境下共享非线程安全的 Python 对象 (如 cv2.Mat)
+- ❌ 禁止将 `.engine` 文件提交到 Git 仓库 (应通过 CI/CD 或手动部署)
+- ❌ 禁止在 `__init__` 中执行耗时初始化 (TensorRT 加载允许，但需有日志提示)
+
+---
+
+*本文档基于 Robocon 2026 项目需求制定，开发过程中应根据实际情况持续迭代。任何架构级变更需同步更新本规则文档。*
