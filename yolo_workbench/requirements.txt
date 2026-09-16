@@ -1,0 +1,7 @@
+ultralytics>=8.4.0
+streamlit>=1.30
+opencv-python
+numpy
+pillow
+albumentations>=1.0.3
+pyyaml
