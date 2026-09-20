@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate Codex Skills"
+  short_description: "Move and verify Codex skills"
+  default_prompt: "Use $migrate-codex-skills to move my local skills to another computer and verify they load."

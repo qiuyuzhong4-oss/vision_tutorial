@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linux Proxy DNS Fix"
+  short_description: "Fix browser proxy and DNS issues"
+  default_prompt: "Use $fix-linux-proxy-dns to diagnose why websites fail when VPN is off but chat apps still connect."
