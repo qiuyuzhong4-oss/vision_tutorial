@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure Codex Profile Keys"
+  short_description: "Generate Codex profile and key templates"
+  default_prompt: "Use $configure-codex-profile-keys to generate a named Codex profile template and matching protected key placeholder."

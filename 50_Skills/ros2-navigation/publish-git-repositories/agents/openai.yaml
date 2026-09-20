@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish Git Repositories"
+  short_description: "Push and repair Git remotes"
+  default_prompt: "Use $publish-git-repositories to safely push my project to GitHub or Gitea and verify the remote."

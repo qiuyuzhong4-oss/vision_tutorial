@@ -1,0 +1,128 @@
+{
+  "title": "Skill 分类：什么项目用什么类型的 Skill",
+  "version": "v0.3",
+  "updated": "2026-09-17",
+  "canonical_location": "~/vision_tutorial/50_Skills/",
+  "intro": "按「什么项目应该用什么类型的 skill」整理。统一管理区在 ~/vision_tutorial/50_Skills/（唯一权威存放地，按分类文件夹存放全部 skill）。来源：① 30_Knowledge/Universal_robotics/ 的技巧提炼；② 桌面 skill/ 的自建 SKILL.md；③ ~/robotics-agent-skills 仓库与已安装的 pdf-converter；④ 工作台四份开发文档的工作流规则提炼（personal-dev-workflow）。",
+  "install_notes": [
+    { "name": "统一管理区", "desc": "~/vision_tutorial/50_Skills/ —— 所有 skill 的权威存放地，按分类文件夹组织，先入库再软链安装" },
+    { "name": "个人级安装", "desc": "~/.claude/skills/<skill>/SKILL.md —— 对所有项目生效；建议软链到 50_Skills 里的源，改一处全生效" },
+    { "name": "项目级安装", "desc": "<项目>/.claude/skills/<skill>/SKILL.md —— 只对当前项目生效，可随 git 分享" },
+    { "name": "manifest 安装", "desc": "npx skills add <github-user>/<repo> —— 仓库带 manifest 时用（pdf-converter 即此方式）" },
+    { "name": "插件市场", "desc": "/plugin marketplace add <github-url>，市场装在 ~/.claude/plugins/marketplaces/" },
+    { "name": "伪 skill", "desc": "纯文字约定直接写 CLAUDE.md / AGENTS.md 即可，不附带脚本/CLI 的别费劲做成 skill" }
+  ],
+  "categories": [
+    {
+      "id": "ros2-nav",
+      "name": "ROS2 导航 / 整车项目",
+      "examples": "RC2026 整车、雷达站导航、Nav2 建图定位、行为树决策、nav_bringup",
+      "skills": [
+        { "name": "ros2", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "ROS2 通用开发规范" },
+        { "name": "ros1", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "ROS1 旧系统维护 / ROS1→ROS2 迁移" },
+        { "name": "robot-bringup", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "整车启动 / bringup 组织" },
+        { "name": "robotics-design-patterns", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "架构模式：行为树/状态机/感知-规划-控制管线/安全系统" },
+        { "name": "robotics-software-principles", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "机器人模块设计原则（SOLID/接口/实时性约束）" },
+        { "name": "robotics-security", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "SROS2/DDS 安全、网络隔离、证书管理" },
+        { "name": "robotics-testing", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "机器人功能测试" },
+        { "name": "docker-ros2-development", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/ros2-navigation/", "usage": "容器化开发环境，环境一致性" },
+        { "name": "robotics-ai-coding-rules", "status": "已有", "origin": "桌面 skill/ → 50_Skills/ros2-navigation/", "usage": "AI 写码协作规则：先复述再动手、计划先行" },
+        { "name": "publish-git-repositories", "status": "已有", "origin": "桌面 skill/ → 50_Skills/ros2-navigation/", "usage": "gitignore 约定：地图/缓存/编译产物/pdf 不上传" },
+        { "name": "ros2-config-files", "status": "已生成（v0.2 提炼）", "origin": "Universal_robotics/ros2_profile.md → 50_Skills/ros2-navigation/ros2-config-files/", "usage": "18 类配置文件职责：什么信息放 package.xml/CMakeLists/launch/YAML/JSON/RViz/URDF/地图/msg/插件/行为树，什么留源码；「看起来是算法问题，其实是 URDF/标定/frame 配置问题」的排查思路" },
+        { "name": "ros2-thread-naming", "status": "已生成（v0.2 提炼）", "origin": "Universal_robotics/CPU资源查询工具.md + 程序资源区分查询工具及方法/ → 50_Skills/ros2-navigation/ros2-thread-naming/", "usage": "进程/线程命名可观测性：PID/TID/Node 名/线程名四者区分；htop 开启自定义线程名显示；C++/Python 命名代码；给 AI 的标准要求话术" },
+        { "name": "ros-team-code-framework", "status": "已生成（v0.2 提炼）", "origin": "Universal_robotics/在导航和相机视觉都必须要学的.md → 50_Skills/ros2-navigation/ros-team-code-framework/", "usage": "视觉组代码框架（docs/script/src{decision,driver,localization,msg,nav_bringup,perception,simulation}）、开发纪律（开发文档+git 提交+Bug 记录+里程碑）、去绝对路径化/gitignore/pdf→md 约定" }
+      ],
+      "knowledge_sources": [
+        "~/vision_tutorial/30_Knowledge/Universal_robotics/ros2_profile.md",
+        "~/vision_tutorial/30_Knowledge/Universal_robotics/CPU资源查询工具.md",
+        "~/RC2026（配置文件样例工程）"
+      ]
+    },
+    {
+      "id": "camera-vision",
+      "name": "相机视觉 / 感知项目",
+      "examples": "D435i 深度相机、海康工业相机、AprilTag、YOLO、相机标定/手眼标定、九宫格空位判断",
+      "skills": [
+        { "name": "robot-perception", "status": "已有", "origin": "robotics-agent-skills 仓库 → 50_Skills/camera-perception/", "usage": "感知算法开发" },
+        { "name": "robotics-ai-coding-rules", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "触发词已覆盖：相机标定、手眼标定、TF、YOLO、AprilTag、RealSense、点云、SLAM 等" },
+        { "name": "ros2-thread-naming", "status": "已生成（跨分类复用）", "origin": "50_Skills/ros2-navigation/ros2-thread-naming/", "usage": "多相机多 pipe 并发、驱动/感知多线程时的命名与排查（「多一个相机就多一个风险，两个顶天」）" },
+        { "name": "yolo-training-params", "status": "已生成（v0.2 提炼）", "origin": "computer-vision/YOLO训练参数手册.md（活文档） → 50_Skills/camera-perception/yolo-training-params/", "usage": "YOLO 训练参数 RM 速查：增强参数（hsv_h≤0.01 防红蓝混淆、scale 小目标核心）、imgsz/batch 8GB 建议、痛点→SAHI 映射、5060/cu128 环境硬约束；skill 内声明以活文档为准" }
+      ],
+      "conventions": "驱动层枚举与控制相机的规范要提前定好；工具方法（如定点画框维护像素点）统一放 script/utils 层。",
+      "knowledge_sources": [
+        "~/vision_tutorial/30_Knowledge/computer-vision/（YOLO训练参数手册、了解CV和RoboMaster视觉组等）",
+        "~/vision_utils、~/kalibr、~/FAST-Calib_Ros2、~/d435_calibration_workbench（相关工程）"
+      ]
+    },
+    {
+      "id": "simulation",
+      "name": "仿真项目（Gazebo/Ignition）",
+      "examples": "rmoss_gazebo、仿真场地搭建、实车前算法验证",
+      "skills": [
+        { "name": "docker-ros2-development", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "仿真环境容器化" },
+        { "name": "ros2", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "通用" },
+        { "name": "robotics-testing", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "仿真验证流程" }
+      ],
+      "conventions": "仿真代码用相对路径（path/os 库），保证 clone 下来直接编译可用（ros-team-code-framework skill 已沉淀该约定）；conda + txt 批量装包；算法节点保持与实车一致，差异放仿真配置与 launch。",
+      "knowledge_sources": [
+        "~/vision_tutorial/50_Skills/ros2-navigation/ros-team-code-framework/",
+        "~/vision_tutorial/30_Knowledge/Universal_robotics/ros2_profile.md（§12 仿真世界与模型配置）"
+      ]
+    },
+    {
+      "id": "nav-vision-fusion",
+      "name": "导航+视觉融合定位",
+      "examples": "相机定位同步到导航 mapping、订阅 base_link 做偏移计算、九宫格空位判断",
+      "skills": [
+        { "name": "ros2 + robot-perception", "status": "已有", "origin": "50_Skills/ 两个分类组合使用", "usage": "导航侧 + 感知侧" },
+        { "name": "ros2-config-files", "status": "已生成（跨分类复用）", "origin": "50_Skills/ros2-navigation/ros2-config-files/", "usage": "融合定位出问题先查 URDF/Xacro 的 frame 与传感器安装位置、再查标定 YAML 是否加载正确——很多「算法问题」其实是配置问题" }
+      ],
+      "knowledge_sources": [
+        "工作台需求总文档.md §2（相机定位九宫格案例，完整实现链路写法示范）",
+        "~/vision_tutorial/50_Skills/ros2-navigation/ros2-config-files/"
+      ]
+    },
+    {
+      "id": "general-tool",
+      "name": "通用工具 / Web 工作台项目",
+      "examples": "开发工作台、YOLO增强工作台、试卷打印工作台、影视下载工作台、各类自动化脚本",
+      "skills": [
+        { "name": "robotics-ai-coding-rules", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "「先复述再动手」的协作规则通用于任何项目" },
+        { "name": "document-processing-workflows", "status": "已有", "origin": "桌面 skill/ → 50_Skills/general-tools/", "usage": "文档批处理" },
+        { "name": "publish-git-repositories", "status": "已有", "origin": "50_Skills/ros2-navigation/（跨分类复用）", "usage": "仓库发布" },
+        { "name": "fix-linux-proxy-dns", "status": "已有", "origin": "桌面 skill/ → 50_Skills/general-tools/", "usage": "Linux 代理/DNS 故障（环境运维类任务触发）" },
+        { "name": "configure-codex-profile-keys / migrate-codex-skills", "status": "已有", "origin": "桌面 skill/ → 50_Skills/general-tools/", "usage": "Codex 配置与 skill 迁移（工具链运维）" },
+        { "name": "ros2-web-integration", "status": "已有（本次登记）", "origin": "robotics-agent-skills 仓库 → 50_Skills/general-tools/", "usage": "rosbridge/roslibjs/WebSocket：给机器人做 Web 仪表盘、相机流上浏览器（多线程本地服务可配合 ros2-thread-naming 排查资源）" },
+        { "name": "personal-dev-workflow", "status": "已生成（v0.3 提炼）", "origin": "工作台四份开发文档（总需求/初稿/框架/技术链路） → 50_Skills/general-tools/personal-dev-workflow/", "usage": "个人开发流程规范：需求五要素、需求完善六步流程（含 AI 复述确认）、文档职责分离（总文档/single/archive/rules）、README 三阶段、开发纪律（开发文档+git 提交+Bug 三要素+里程碑）、现阶段 skill 约定（只用纯知识 skill、不装项目常驻 skill）" }
+      ],
+      "knowledge_sources": [
+        "~/vision_tutorial/30_Knowledge/engineering-tools/（utils_software、使用SSH连接远程服务器、env_set.sh）",
+        "~/vision_tutorial/30_Knowledge/programming/use_git.md"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "name": "知识库 / 文档整理",
+      "examples": "vision_tutorial 维护、RM_Knowledge 整理、AI 对话沉淀成笔记、PDF 转 MD",
+      "skills": [
+        { "name": "knowledge-base-curation-rules", "status": "已有", "origin": "桌面 skill/ → 50_Skills/knowledge-curation/", "usage": "知识库整理规则：组织/分类/迁移/清洗/成文" },
+        { "name": "pdf-converter", "status": "已安装", "origin": "~/.agents/skills（npx skills add） → 副本 50_Skills/knowledge-curation/", "usage": "PDF → MD/Word 轻量化：配合你的 git 约定「pdf 要转成 md 才上传」" }
+      ],
+      "knowledge_sources": [
+        "~/vision_tutorial/50_Skills/装skill方法总结.md（安装方式总纲）",
+        "~/vision_tutorial/30_Knowledge/ai/AI工具的挑选.md"
+      ]
+    }
+  ],
+  "universal_rules": [
+    "写代码前先对齐代码框架（视觉组框架：docs/ script(utils)/ src{config,launch,decision,driver,localization,msg,nav_bringup,perception,simulation}/ README.md sh脚本）→ 已沉淀为 ros-team-code-framework skill",
+    "项目必须去绝对路径化：不写死 /home/xxx，用脚本位置推导/path/os 相对路径，保证 git 协作可 clone 即用",
+    "给 AI 下工程任务要带上「可观测性/验证」要求（线程命名要在 htop 可见）→ 已沉淀为 ros2-thread-naming skill",
+    "每次开发写开发文档 + git 提交；BUG 记录含原因+手法+截图；里程碑逐个标记 → 已沉淀为 ros-team-code-framework skill",
+    "pdf 转 md 轻量化后才上传 git；地图/缓存/编译产物 gitignore → 已沉淀为 ros-team-code-framework skill",
+    "文档用 Markdown 轻量化书写",
+    "现阶段只用纯知识/规则类 skill（不带 sh 脚本），不在项目内装常驻 skill；项目内引用 skill 知识用工作台拖入扁平化为 <功能名>.md → 已沉淀为 personal-dev-workflow skill"
+  ],
+  "todo_candidates": [],
+  "todo_note": "v0.1 中建议新建的 4 个 skill 已全部提炼完成入库（ros2-config-files / ros2-thread-naming / ros-team-code-framework / yolo-training-params）。后续新 skill 按 50_Skills/README.md 的维护约定：先入分类文件夹，再软链安装。"
+}

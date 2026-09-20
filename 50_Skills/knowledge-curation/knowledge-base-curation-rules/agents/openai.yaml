@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge Base Curation Rules"
+  short_description: "知识库整理规则：先读上下文，计划确认后写入并验证结果"
+  default_prompt: "Use $knowledge-base-curation-rules to organize my RM_Knowledge materials with a plan, preview, confirmation, and verification."

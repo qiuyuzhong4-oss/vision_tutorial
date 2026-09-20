@@ -1,0 +1,4 @@
+interface:
+  display_name: "Robotics AI Coding Rules"
+  short_description: "Rules for robotics coding with AI"
+  default_prompt: "Use $robotics-ai-coding-rules before changing code in my robotics vision or electrical-control project."

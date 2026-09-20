@@ -1,0 +1,4 @@
+interface:
+  display_name: "Document Processing Workflows"
+  short_description: "Route PDF and document extraction"
+  default_prompt: "Use $document-processing-workflows to read, OCR, convert, or extract tables from my PDF or document."
