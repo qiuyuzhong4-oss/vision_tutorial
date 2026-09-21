@@ -24,7 +24,6 @@
 
 - [网址收藏](./40_Resources/links/还行的网址.md)
 - [`40_Resources/assets/Image_base`](./40_Resources/assets/Image_base/)：笔记共用图片库
-- [`50_Practice/opencv_test`](./50_Practice/opencv_test/)：OpenCV 练习代码与素材
 
 ## 目录约定
 
@@ -33,7 +32,6 @@
 - `20_Areas`：健康、生活、家庭等长期维护的领域。
 - `30_Knowledge`：技术知识与可重复查阅的笔记。
 - `40_Resources`：链接、图片、演示文稿等参考资料。
-- `50_Practice`：可运行的练习、实验代码。
 
 ## License
 
